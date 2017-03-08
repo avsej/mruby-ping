@@ -11,7 +11,6 @@ class ICMPPinger
     @targets << [
       addr,
       opts.delete(:routing_table) || 0,
-      opts.delete(:uid) || 0,
       opts.delete(:interface),
       opts.delete(:source_address)
     ]
@@ -45,7 +44,7 @@ class ICMPPinger
     ret2 = {}
     
     # do the maths
-    ret1.each do |host, latencies|
+    ret1.each_with_index do |latencies, idx|
       sum = loss = 0
       latencies.each do |n|
         if n
@@ -55,6 +54,7 @@ class ICMPPinger
         end
       end
       
+      host = @targets[idx][0]
       # [host, sum / latencies.size(), (loss / latencies.size()) * 100]
       ret2[host] = [sum / latencies.size(), (loss / latencies.size()) * 100, {}]
       unless wanted_percentiles.empty?

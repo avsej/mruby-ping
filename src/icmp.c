@@ -241,7 +241,6 @@ static mrb_value ping_set_targets(mrb_state *mrb, mrb_value self)
     mrb_value arr2 = mrb_ary_ref(mrb, arr, n);
     mrb_value r_addr = mrb_ary_ref(mrb, arr2, 0);
     mrb_value r_rtable = mrb_ary_ref(mrb, arr2, 1);
-    mrb_value r_uid = mrb_ary_ref(mrb, arr2, 2);
     mrb_value r_ifname = mrb_ary_ref(mrb, arr2, 3);
     mrb_value r_src_addr = mrb_ary_ref(mrb, arr2, 4);
     
@@ -260,8 +259,6 @@ static mrb_value ping_set_targets(mrb_state *mrb, mrb_value self)
       else {
         st->targets[n].in_addr_src = inet_addr( mrb_str_to_cstr(mrb, r_src_addr) );
       }
-      
-      st->targets[n].uid = (uint16_t) mrb_fixnum(r_uid);
       
 #ifdef SO_BINDTODEVICE
       bzero(st->targets[n].device, sizeof(st->targets[n].device));
@@ -446,7 +443,7 @@ static mrb_value ping_send_pings(mrb_state *mrb, mrb_value self)
   }
   
   
-  ret_value = mrb_hash_new_capa(mrb, st->targets_count);
+  ret_value = mrb_ary_new_capa(mrb, st->targets_count);
   
   // setup the receiver thread
   replies = MALLOC(st->targets_count * count * sizeof(struct ping_reply));
@@ -472,8 +469,8 @@ static mrb_value ping_send_pings(mrb_state *mrb, mrb_value self)
     // and then sleep
     for(i = 0; i< st->targets_count; i++){
       int sending_socket = -1;
-      uint16_t reply_id;
-      mrb_value key, arr;
+      uint16_t reply_id = i + 100;
+      mrb_value arr;
       struct ping_reply *reply = &replies[replies_index];
       libnet_ptag_t t;
       libnet_t *l;
@@ -489,14 +486,8 @@ static mrb_value ping_send_pings(mrb_state *mrb, mrb_value self)
         exit(1);
       }
       
-      reply_id = st->targets[i].uid;
-      if( reply_id == 0 ){
-        reply_id = 100 + i;
-      }
-      
-      key = mrb_fixnum_value(reply_id);
       arr = mrb_ary_new_capa(mrb, count);
-      mrb_hash_set(mrb, ret_value, key, arr);
+      mrb_ary_set(mrb, ret_value, i, arr);
       
       reply->id = reply_id;
       reply->seq = j + 1;
@@ -590,14 +581,14 @@ static mrb_value ping_send_pings(mrb_state *mrb, mrb_value self)
   // and process the received replies
   for(i = 0; i< replies_index; i++){
     // char *host = inet_ntoa( *((struct in_addr *) &replies[i].addr));
-    mrb_value key, value;
+    mrb_value value;
     mrb_int latency;
+    uint16_t target_idx = replies[i].id - 100;
     
     // key = mrb_str_new_cstr(mrb, host);
-    key = mrb_fixnum_value(replies[i].id);
-    value = mrb_hash_get(mrb, ret_value, key);
+    value = mrb_ary_ref(mrb, ret_value, target_idx);
     if( mrb_nil_p(value) ){
-      printf("no array with key %d !\n", replies[i].id);
+      printf("no array with key %d !\n", target_idx);
       goto error;
     }
     
